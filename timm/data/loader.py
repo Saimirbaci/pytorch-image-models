@@ -58,6 +58,7 @@ class PrefetchLoader:
 
     def __init__(self,
                  loader,
+                 input_channels=3,
                  mean=IMAGENET_DEFAULT_MEAN,
                  std=IMAGENET_DEFAULT_STD,
                  fp16=False,
@@ -66,8 +67,8 @@ class PrefetchLoader:
                  re_count=1,
                  re_num_splits=0):
         self.loader = loader
-        self.mean = torch.tensor([x * 255 for x in mean]).cuda().view(1, 3, 1, 1)
-        self.std = torch.tensor([x * 255 for x in std]).cuda().view(1, 3, 1, 1)
+        self.mean = torch.tensor([x * 255 for x in mean]).cuda().view(1, input_channels, 1, 1)
+        self.std = torch.tensor([x * 255 for x in std]).cuda().view(1, input_channels, 1, 1)
         self.fp16 = fp16
         if fp16:
             self.mean = self.mean.half()
@@ -178,6 +179,7 @@ def create_loader(
         worker_seeding='all',
 ):
     re_num_splits = 0
+    in_channels = input_size[0]
     if re_split:
         # apply RE to second half of batch if no aug split otherwise line up with aug split
         re_num_splits = num_aug_splits or 2
@@ -245,6 +247,7 @@ def create_loader(
         prefetch_re_prob = re_prob if is_training and not no_aug else 0.
         loader = PrefetchLoader(
             loader,
+            input_channels=in_channels,
             mean=mean,
             std=std,
             fp16=fp16,

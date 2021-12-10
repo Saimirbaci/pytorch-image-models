@@ -10,6 +10,9 @@ import logging
 from PIL import Image
 
 from .parsers import create_parser
+import pandas as pd
+from torchvision.io import read_image
+from torchvision.io import ImageReadMode
 
 _logger = logging.getLogger(__name__)
 
@@ -150,3 +153,32 @@ class AugMixDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.dataset)
+
+
+class EventMNISTDataset(data.Dataset):
+    def __init__(self, root, split='train', transform=None, target_transform=None):
+        self.img_labels = pd.read_csv(os.path.join(root, "labels.csv"))
+
+        if split in ['val', 'valid', 'validation']:
+            self.img_labels = self.img_labels.sample(frac=0.2, axis='index')
+
+        self.img_dir = root
+        self.split = split
+        self.transform = transform
+        self.target_transform = target_transform
+
+    def __len__(self):
+        return len(self.img_labels)
+
+    def __getitem__(self, idx):
+        img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
+        image = Image.open(img_path).convert('RGB')
+        image = image.convert('L') # Reading grayscale
+        # image = read_image(img_path, mode=ImageReadMode.GRAY)
+        label = self.img_labels.iloc[idx, 1]
+        if self.transform:
+            image = self.transform(image)
+        if self.target_transform:
+            label = self.target_transform(label)
+        return image, label
+
