@@ -6,6 +6,8 @@ import torch.utils.data as data
 import os
 import torch
 import logging
+import math
+import tqdm
 
 from PIL import Image
 
@@ -13,6 +15,10 @@ from .parsers import create_parser
 import pandas as pd
 from torchvision.io import read_image
 from torchvision.io import ImageReadMode
+from torchvision import datasets as torch_datasets
+from torchvision import transforms
+from torchvision.utils import save_image
+
 
 _logger = logging.getLogger(__name__)
 
@@ -156,16 +162,43 @@ class AugMixDataset(torch.utils.data.Dataset):
 
 
 class EventMNISTDataset(data.Dataset):
-    def __init__(self, root, split='train', transform=None, target_transform=None):
-        self.img_labels = pd.read_csv(os.path.join(root, "labels.csv"))
+    def __init__(self, root, split='train', transform=None, target_transform=None, number_of_frames=9,
+                 img_prefix="img_"):
+        self.dataset_root = root
+        self.train_dir = os.path.join(self.dataset_root, "train")
+        self.val_dir = os.path.join(self.dataset_root, "val")
+        self.test_dir = os.path.join(self.dataset_root, "test")
+        self.dir_dict = {
+            "train": self.train_dir,
+            "val": self.val_dir,
+            "valid": self.val_dir,
+            "validation": self.val_dir,
+            "test": self.test_dir,
 
-        if split in ['val', 'valid', 'validation']:
-            self.img_labels = self.img_labels.sample(frac=0.2, axis='index')
+        }
 
-        self.img_dir = root
-        self.split = split
         self.transform = transform
         self.target_transform = target_transform
+        accepted_frames = [4, 9, 16, 25, 36, 49, 64]
+        if number_of_frames not in [4, 9, 16, 25, 36, 49, 64]:
+            raise Exception("The number of frames should be a value between {}")
+        self.number_of_frames = number_of_frames
+        self.frames_per_row = int(math.sqrt(number_of_frames))
+        self.frames_per_col = self.frames_per_row
+
+        self.img_dir = self.dir_dict[split]
+        self.labels_file = os.path.join(self.img_dir, "labels.csv")
+        self.csv_data = {'fname': [], 'label': []}
+        self.raw_data_loader = None
+        self.generated_img_id = 0
+        if not os.path.exists(self.labels_file):
+            if not os.path.exists(self.img_dir):
+                os.makedirs(self.img_dir)
+            self.__download_raw_data(split)
+            self.__create_event_training_data(split, img_prefix)
+            self.__create_no_event_training_data(split, img_prefix)
+            self.__save_annotations()
+        self.img_labels = pd.read_csv(self.labels_file)
 
     def __len__(self):
         return len(self.img_labels)
@@ -173,7 +206,7 @@ class EventMNISTDataset(data.Dataset):
     def __getitem__(self, idx):
         img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
         image = Image.open(img_path).convert('RGB')
-        image = image.convert('L') # Reading grayscale
+        image = image.convert('L')  # Reading grayscale
         # image = read_image(img_path, mode=ImageReadMode.GRAY)
         label = self.img_labels.iloc[idx, 1]
         if self.transform:
@@ -181,4 +214,86 @@ class EventMNISTDataset(data.Dataset):
         if self.target_transform:
             label = self.target_transform(label)
         return image, label
+
+    def __download_raw_data(self, split):
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        if split in ["train"]:
+            dataset1 = torch_datasets.MNIST(f"{os.path.join(self.dataset_root, 'raw')}", train=True, download=True,
+                                            transform=transform)
+        elif split in ["val", "valid", "validation"]:
+            dataset1 = torch_datasets.MNIST(f"{os.path.join(self.dataset_root, 'raw')}", train=False, download=True,
+                                            transform=transform)
+
+        train_kwargs = {'batch_size': self.number_of_frames}
+
+        self.raw_data_loader = torch.utils.data.DataLoader(dataset1, **train_kwargs)
+
+    def __create_event_training_data(self, split, img_prefix="img_"):
+
+        no_cuda = True
+        use_cuda = not no_cuda and torch.cuda.is_available()
+        device = torch.device("cuda" if use_cuda else "cpu")
+
+        event = 1
+        for batch_idx, (data, target) in enumerate(tqdm.tqdm(self.raw_data_loader, desc="Creating the event dataset")):
+            data, target = data.to(device), target.to(device)
+            if data.shape[0] != self.number_of_frames:
+                continue
+
+            data = data.reshape(self.frames_per_row, data.shape[1], data.shape[2] * self.frames_per_row, data.shape[3])
+            data = data.transpose(2, 3)
+            data = data.reshape(1, data.shape[1], data.shape[2] * self.frames_per_row, data.shape[3])
+            data = data.transpose(2, 3)
+            image_data = data[0]
+            img_id = f'{self.generated_img_id}'.zfill(9)
+            img_name = f'{img_prefix}{img_id}.png'
+            img_path = os.path.join(self.img_dir, img_name)
+            save_image(image_data, f'{img_path}')
+            self.csv_data["fname"].append(img_name)
+            self.csv_data["label"].append(event)
+            self.generated_img_id += 1
+
+    def __create_no_event_training_data(self, split, img_prefix="img_"):
+
+        no_cuda = True
+        use_cuda = not no_cuda and torch.cuda.is_available()
+        device = torch.device("cuda" if use_cuda else "cpu")
+        event = 0
+
+        label_to_tensors = {}
+        for batch_idx, (data, target) in enumerate(
+                tqdm.tqdm(self.raw_data_loader, desc="Creating the no event dataset")):
+            data, target = data.to(device), target.to(device)
+            for sample_idx in range(data.shape[0]):
+                if target[sample_idx].item() not in label_to_tensors:
+                    label_to_tensors[target[sample_idx].item()] = [data[sample_idx]]
+                else:
+                    label_to_tensors[target[sample_idx].item()].append(data[sample_idx])
+
+        for label, value in label_to_tensors.items():
+            for batch in range(0, len(value), self.number_of_frames):
+                data = value[batch:batch + self.number_of_frames]
+                if len(data) != 9:
+                    continue
+                data = torch.stack(data)
+                data = data.reshape(self.frames_per_row, data.shape[1], data.shape[2] * self.frames_per_row,
+                                    data.shape[3])
+                data = data.transpose(2, 3)
+                data = data.reshape(1, data.shape[1], data.shape[2] * self.frames_per_row, data.shape[3])
+                data = data.transpose(2, 3)
+                image_data = data[0]
+                img_id = f'{self.generated_img_id}'.zfill(9)
+                img_name = f'{img_prefix}{img_id}.png'
+                img_path = os.path.join(self.img_dir, img_name)
+                save_image(image_data, f'{img_path}')
+
+                self.csv_data["fname"].append(img_name)
+                self.csv_data["label"].append(event)
+                self.generated_img_id += 1
+
+    def __save_annotations(self):
+        pd.DataFrame(self.csv_data).to_csv(self.labels_file, index=False)
 
