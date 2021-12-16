@@ -7,17 +7,24 @@ import os
 import torch
 import logging
 import math
+import collections
 import tqdm
+import cv2
+import torch
+import pandas as pd
 
+from glob import glob
 from PIL import Image
 
 from .parsers import create_parser
-import pandas as pd
 from torchvision.io import read_image
 from torchvision.io import ImageReadMode
 from torchvision import datasets as torch_datasets
 from torchvision import transforms
 from torchvision.utils import save_image
+from torch.utils.data import Dataset
+
+from torchvision.utils import make_grid
 
 
 _logger = logging.getLogger(__name__)
@@ -296,4 +303,103 @@ class EventMNISTDataset(data.Dataset):
 
     def __save_annotations(self):
         pd.DataFrame(self.csv_data).to_csv(self.labels_file, index=False)
+
+
+class VideoEventDataset(Dataset):
+    def __init__(self, root, input_data,
+                 split='train',
+                 transform=None,
+                 target_transform=None,
+                 number_of_frames=9,
+                 img_prefix="img_",
+                 video_ext="mp4"):
+        """
+
+        """
+
+        self.dataset_root = root
+        # Video should be stored in the following directory structure
+        # root/event/video.ext, where event is an integer mapping the labeled event for that video
+        self.video_ext = video_ext
+        self.video_list = glob(f"{input_data}/*/*.{self.video_ext}")
+
+        self.train_dir = os.path.join(self.dataset_root, "train")
+        self.val_dir = os.path.join(self.dataset_root, "val")
+        self.test_dir = os.path.join(self.dataset_root, "test")
+        self.dir_dict = {
+            "train": self.train_dir,
+            "val": self.val_dir,
+            "valid": self.val_dir,
+            "validation": self.val_dir,
+            "test": self.test_dir,
+
+        }
+
+        self.transform = transform
+        self.target_transform = target_transform
+        accepted_frames = [4, 9, 16, 25, 36, 49, 64]
+        if number_of_frames not in [4, 9, 16, 25, 36, 49, 64]:
+            raise Exception("The number of frames should be a value between {}")
+        self.number_of_frames = number_of_frames
+        self.frames_per_row = int(math.sqrt(number_of_frames))
+        self.frames_per_col = self.frames_per_row
+
+        self.img_dir = self.dir_dict[split]
+        self.labels_file = os.path.join(self.img_dir, "labels.csv")
+        self.csv_data = {'fname': [], 'label': []}
+        self.raw_data_loader = None
+        self.generated_img_id = 0
+        if not os.path.exists(self.labels_file):
+            if not os.path.exists(self.img_dir):
+                os.makedirs(self.img_dir)
+            self.__create_event_data_split(split, img_prefix)
+            self.__save_annotations()
+            self.img_labels = pd.read_csv(self.labels_file)
+
+    def __len__(self):
+        return len(self.img_labels)
+
+    def __getitem__(self, idx):
+        img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
+        image = Image.open(img_path).convert('RGB')
+        label = self.img_labels.iloc[idx, 1]
+        if self.transform:
+            image = self.transform(image)
+        if self.target_transform:
+            label = self.target_transform(label)
+        return image, label
+
+    def __create_event_data_split(self, split, img_prefix):
+        transform = transforms.ToTensor()
+        for video in self.video_list:
+            event = video.split("/")[1]
+            vidcap = cv2.VideoCapture(video)
+            success, image = vidcap.read()
+            image_buffer = collections.deque(maxlen=self.number_of_frames)
+            while success:
+                success, image = vidcap.read()
+                if success:
+                    image = cv2.resize(image, (
+                    int(image.shape[1] / self.frames_per_row), int(image.shape[0] / self.frames_per_col)))
+                    image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+                    tensor = transform(image)
+                    image_buffer.append(tensor)
+                    if len(image_buffer) != image_buffer.maxlen:
+                        continue
+
+                    image_data = make_grid(list(image_buffer), nrow=self.frames_per_row)
+                    img_id = f'{self.generated_img_id}'.zfill(9)
+                    img_name = f'{img_prefix}{img_id}.png'
+                    img_path = os.path.join(self.img_dir, img_name)
+                    save_image(image_data, f'{img_path}')
+
+                    self.csv_data["fname"].append(img_name)
+                    self.csv_data["label"].append(event)
+                    self.generated_img_id += 1
+                else:
+                    break
+
+    def __save_annotations(self):
+        pd.DataFrame(self.csv_data).to_csv(self.labels_file, index=False)
+
 
