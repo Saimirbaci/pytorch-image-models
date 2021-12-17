@@ -305,12 +305,32 @@ class EventMNISTDataset(data.Dataset):
         pd.DataFrame(self.csv_data).to_csv(self.labels_file, index=False)
 
 
+import math
+import cv2
+import os
+import collections
+import pandas as pd
+from torchvision.io import read_image
+from torch.utils.data import Dataset
+from torchvision import datasets as torch_datasets
+from torchvision import transforms
+import torch
+from torchvision.utils import save_image
+import tqdm
+from glob import glob
+
+from PIL import Image
+from torchvision.utils import make_grid
+
+
 class VideoEventDataset(Dataset):
     def __init__(self, root, input_data,
                  split='train',
                  transform=None,
                  target_transform=None,
                  number_of_frames=9,
+                 crop=None,
+                 update=False,  # If the dataset creation should be re-run
                  img_prefix="img_",
                  video_ext="mp4"):
         """
@@ -321,7 +341,9 @@ class VideoEventDataset(Dataset):
         # Video should be stored in the following directory structure
         # root/event/video.ext, where event is an integer mapping the labeled event for that video
         self.video_ext = video_ext
-        self.video_list = glob(f"{input_data}/*/*.{self.video_ext}")
+
+        # Fix automatic validation and training dataset creation
+        self.video_list = glob(f"{input_data}/{split}/*/*.{self.video_ext}")
 
         self.train_dir = os.path.join(self.dataset_root, "train")
         self.val_dir = os.path.join(self.dataset_root, "val")
@@ -334,8 +356,10 @@ class VideoEventDataset(Dataset):
             "test": self.test_dir,
 
         }
-
+        self.update = update
         self.transform = transform
+        self.crop = crop  # (y, h, x, w)
+
         self.target_transform = target_transform
         accepted_frames = [4, 9, 16, 25, 36, 49, 64]
         if number_of_frames not in [4, 9, 16, 25, 36, 49, 64]:
@@ -349,7 +373,7 @@ class VideoEventDataset(Dataset):
         self.csv_data = {'fname': [], 'label': []}
         self.raw_data_loader = None
         self.generated_img_id = 0
-        if not os.path.exists(self.labels_file):
+        if not os.path.exists(self.labels_file) or self.update:
             if not os.path.exists(self.img_dir):
                 os.makedirs(self.img_dir)
             self.__create_event_data_split(split, img_prefix)
@@ -362,6 +386,8 @@ class VideoEventDataset(Dataset):
     def __getitem__(self, idx):
         img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
         image = Image.open(img_path).convert('RGB')
+        image = image.convert('L')  # Reading grayscale
+        # image = read_image(img_path, mode=ImageReadMode.GRAY)
         label = self.img_labels.iloc[idx, 1]
         if self.transform:
             image = self.transform(image)
@@ -381,6 +407,10 @@ class VideoEventDataset(Dataset):
                 if success:
                     image = cv2.resize(image, (
                     int(image.shape[1] / self.frames_per_row), int(image.shape[0] / self.frames_per_col)))
+                    if self.crop is not None:
+                        image = image[self.crop[0]:self.crop[0] + self.crop[1],
+                            self.crop[2]:self.crop[2] + self.crop[3]]
+
                     image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
                     tensor = transform(image)
                     image_buffer.append(tensor)

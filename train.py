@@ -303,6 +303,20 @@ parser.add_argument('--log-wandb', action='store_true', default=False,
                     help='log training and validation metrics to wandb')
 
 
+#Arguments given to the VideoEventDataset
+parser.add_argument("--input_data_dir", default="input_data", type=str,
+                    help="The folder containing the videos in the format below"
+                        "data/train/{0/1}/video_1.mpg"
+                        "data/val/{0/1}/video_1.mpg")
+parser.add_argument("--number_of_frames", default=9, type=int, choices=[4, 9, 16, 25, 36, 49, 64],
+                    help="Number of frames to use for building the patch having the sequence we want to detect as event")
+parser.add_argument("--update", default=False, type=bool)
+parser.add_argument("--crop", default=None, type=tuple, help="Crop the image in the format [y,h, x,w], "
+                                                             "where y,x are the coordinates from top left"
+                                                             "E.X x=0, y=0 is top left")
+
+
+
 def _parse_args():
     # Do we have a config file to parse?
     args_config, remaining = config_parser.parse_known_args()
@@ -383,7 +397,8 @@ def main():
         scriptable=args.torchscript,
         checkpoint_path=args.initial_checkpoint,
         in_chans=args.input_channels,
-        img_size=args.input_size[1:])
+        # img_size=args.input_size[1:]
+    )
     if args.num_classes is None:
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
         args.num_classes = model.num_classes  # FIXME handle model default vs config num_classes more elegantly
@@ -498,12 +513,18 @@ def main():
         class_map=args.class_map,
         download=args.dataset_download,
         batch_size=args.batch_size,
-        repeats=args.epoch_repeats)
+        repeats=args.epoch_repeats,
+        number_of_frames=args.number_of_frames,
+        input_data=args.input_data_dir,
+    )
     dataset_eval = create_dataset(
         args.dataset, root=args.data_dir, split=args.val_split, is_training=False,
         class_map=args.class_map,
         download=args.dataset_download,
-        batch_size=args.batch_size)
+        batch_size=args.batch_size,
+        number_of_frames=args.number_of_frames,
+        input_data=args.input_data_dir,
+    )
 
     # setup mixup / cutmix
     collate_fn = None

@@ -12,7 +12,7 @@ try:
 except ImportError:
     has_inaturalist = False
 
-from .dataset import IterableImageDataset, ImageDataset, EventMNISTDataset
+from .dataset import IterableImageDataset, ImageDataset, EventMNISTDataset, VideoEventDataset
 
 _TORCH_BASIC_DS = dict(
     cifar10=CIFAR10,
@@ -132,6 +132,8 @@ def create_dataset(
             download=download, batch_size=batch_size, repeats=repeats, **kwargs)
     elif name == 'eventmnist':
         ds = EventMNISTDataset(root, split=split)
+    elif name == 'videoeventdataset':
+        ds = VideoEventDataset(root, split=split, **kwargs)
     else:
         # FIXME support more advance split cfg for ImageFolder/Tar datasets in the future
         if search_split and os.path.isdir(root):
