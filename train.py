@@ -314,7 +314,7 @@ parser.add_argument("--update", default=False, type=bool)
 parser.add_argument("--crop", default=None, type=tuple, help="Crop the image in the format [y,h, x,w], "
                                                              "where y,x are the coordinates from top left"
                                                              "E.X x=0, y=0 is top left")
-parser.add_argument("--video_ext", default=None, type=str, help="The extension of the video files to be parsed for dataset creation")
+parser.add_argument("--video_ext", default="mp4", type=str, help="The extension of the video files to be parsed for dataset creation")
 
 
 

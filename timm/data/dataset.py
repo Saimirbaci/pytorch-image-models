@@ -345,6 +345,8 @@ class VideoEventDataset(Dataset):
         # Fix automatic validation and training dataset creation
         self.video_list = glob(f"{input_data}/{split}/*/*.{self.video_ext}")
 
+        print(f"The following {split} videos were found in the directory {self.video_list }")
+
         self.train_dir = os.path.join(self.dataset_root, "train")
         self.val_dir = os.path.join(self.dataset_root, "val")
         self.test_dir = os.path.join(self.dataset_root, "test")
@@ -401,6 +403,10 @@ class VideoEventDataset(Dataset):
             event = video.split("/")[1]
             vidcap = cv2.VideoCapture(video)
             success, image = vidcap.read()
+
+            if success is False:
+                print("Video file could not be read")
+                raise("VideoFormatError")
             image_buffer = collections.deque(maxlen=self.number_of_frames)
             while success:
                 success, image = vidcap.read()
