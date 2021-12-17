@@ -314,6 +314,7 @@ parser.add_argument("--update", default=False, type=bool)
 parser.add_argument("--crop", default=None, type=tuple, help="Crop the image in the format [y,h, x,w], "
                                                              "where y,x are the coordinates from top left"
                                                              "E.X x=0, y=0 is top left")
+parser.add_argument("--video_ext", default=None, type=str, help="The extension of the video files to be parsed for dataset creation")
 
 
 
@@ -516,6 +517,7 @@ def main():
         repeats=args.epoch_repeats,
         number_of_frames=args.number_of_frames,
         input_data=args.input_data_dir,
+        video_ext=args.video_ext
     )
     dataset_eval = create_dataset(
         args.dataset, root=args.data_dir, split=args.val_split, is_training=False,
@@ -524,6 +526,7 @@ def main():
         batch_size=args.batch_size,
         number_of_frames=args.number_of_frames,
         input_data=args.input_data_dir,
+        video_ext=args.video_ext
     )
 
     # setup mixup / cutmix
