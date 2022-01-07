@@ -77,8 +77,8 @@ parser.add_argument('--dataset', '-d', metavar='NAME', default='',
                     help='dataset type (default: ImageFolder/ImageTar if empty)')
 parser.add_argument('--train-split', metavar='NAME', default='train',
                     help='dataset train split (default: train)')
-parser.add_argument('--val-split', metavar='NAME', default='validation',
-                    help='dataset validation split (default: validation)')
+parser.add_argument('--val-split', metavar='NAME', default='val',
+                    help='dataset validation split (default: val)')
 parser.add_argument('--dataset-download', action='store_true', default=False,
                     help='Allow download of dataset for torch/ and tfds/ datasets that support it.')
 parser.add_argument('--class-map', default='', type=str, metavar='FILENAME',
@@ -310,12 +310,12 @@ parser.add_argument("--input_data_dir", default="input_data", type=str,
                         "data/val/{0/1}/video_1.mpg")
 parser.add_argument("--number_of_frames", default=9, type=int, choices=[4, 9, 16, 25, 36, 49, 64],
                     help="Number of frames to use for building the patch having the sequence we want to detect as event")
-parser.add_argument("--update", default=False, type=bool)
+parser.add_argument("--update", default=True, type=bool)
+#parser.add_argument("--update", default=False, dest="update", help="Update the train/val image tile creation")
 parser.add_argument("--crop", default=None, type=tuple, help="Crop the image in the format [y,h, x,w], "
                                                              "where y,x are the coordinates from top left"
                                                              "E.X x=0, y=0 is top left")
 parser.add_argument("--video_ext", default="mp4", type=str, help="The extension of the video files to be parsed for dataset creation")
-
 
 
 def _parse_args():

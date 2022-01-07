@@ -330,7 +330,7 @@ class VideoEventDataset(Dataset):
                  target_transform=None,
                  number_of_frames=9,
                  crop=None,
-                 update=False,  # If the dataset creation should be re-run
+                 update=True,  # If the dataset creation should be re-run
                  img_prefix="img_",
                  video_ext="mp4"):
         """
@@ -349,6 +349,7 @@ class VideoEventDataset(Dataset):
 
         self.train_dir = os.path.join(self.dataset_root, "train")
         self.val_dir = os.path.join(self.dataset_root, "val")
+        #print("val dir: " + str(self.val_dir))
         self.test_dir = os.path.join(self.dataset_root, "test")
         self.dir_dict = {
             "train": self.train_dir,
@@ -358,7 +359,9 @@ class VideoEventDataset(Dataset):
             "test": self.test_dir,
 
         }
+        
         self.update = update
+        #print("update: " + str(self.update))
         self.transform = transform
         self.crop = crop  # (y, h, x, w)
 
@@ -372,6 +375,7 @@ class VideoEventDataset(Dataset):
 
         self.img_dir = self.dir_dict[split]
         self.labels_file = os.path.join(self.img_dir, "labels.csv")
+        #print("labels file: " + str(self.labels_file))
         self.csv_data = {'fname': [], 'label': []}
         self.raw_data_loader = None
         self.generated_img_id = 0
@@ -400,7 +404,7 @@ class VideoEventDataset(Dataset):
     def __create_event_data_split(self, split, img_prefix):
         transform = transforms.ToTensor()
         for video in self.video_list:
-            event = video.split("/")[1]
+            event = video.split("/")[3] # 0 or 1 directory
             vidcap = cv2.VideoCapture(video)
             success, image = vidcap.read()
 
