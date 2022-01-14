@@ -302,20 +302,19 @@ parser.add_argument('--torchscript', dest='torchscript', action='store_true',
 parser.add_argument('--log-wandb', action='store_true', default=False,
                     help='log training and validation metrics to wandb')
 
-
-#Arguments given to the VideoEventDataset
+# Arguments given to the VideoEventDataset
 parser.add_argument("--input_data_dir", default="input_data", type=str,
                     help="The folder containing the videos in the format below"
                         "data/train/{0/1}/video_1.mpg"
                         "data/val/{0/1}/video_1.mpg")
 parser.add_argument("--number_of_frames", default=9, type=int, choices=[4, 9, 16, 25, 36, 49, 64],
-                    help="Number of frames to use for building the patch having the sequence we want to detect as event")
+                help="Number of frames to use for building the patch having the sequence we want to detect as event")
 parser.add_argument("--update", default=False, type=bool)
 parser.add_argument("--crop", default=None, type=tuple, help="Crop the image in the format [y,h, x,w], "
                                                              "where y,x are the coordinates from top left"
                                                              "E.X x=0, y=0 is top left")
-parser.add_argument("--video_ext", default="mp4", type=str, help="The extension of the video files to be parsed for dataset creation")
-
+parser.add_argument("--video_ext", default="mp4", type=str, help="The extension of the video files to be parsed for "
+                                                                 "dataset creation")
 
 
 def _parse_args():
